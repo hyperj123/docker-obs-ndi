@@ -1,37 +1,45 @@
 FROM accetto/ubuntu-vnc-xfce-g3
 
-# for the VNC connection
-EXPOSE 5901  
-# for the browser VNC client
-EXPOSE 6901 
-# for the obs-websocket plugin
-EXPOSE 4455
+# Expose VNC, noVNC, and OBS WebSocket ports
+EXPOSE 5901 6901 4455
 
-
-# Use environment variable to allow custom VNC passwords
+# Set environment variables
 ENV VNC_PASSWD=headless
-
-#Add needed nvidia environment variables for https://github.com/NVIDIA/nvidia-docker
 ENV NVIDIA_DRIVER_CAPABILITIES="compute,video,utility"
 
-# Make sure the dependencies are met
-RUN echo headless | sudo -S -k apt-get update \
-	&& echo headless | sudo -S -k apt install -y --fix-broken avahi-daemon xterm git build-essential cmake curl ffmpeg git libboost-dev libnss3 mesa-utils qtbase5-dev strace x11-xserver-utils net-tools python3 python3-numpy scrot wget software-properties-common vlc jq udev unrar qt5-image-formats-plugins \
-	&& echo headless | sudo -S -k sed -i 's/geteuid/getppid/' /usr/bin/vlc \
-	&& echo headless | sudo -S -k add-apt-repository ppa:obsproject/obs-studio \
-	&& echo headless | sudo -S -k mkdir -p /config/obs-studio /root/.config/ \
-	&& echo headless | sudo -S -k ln -s /config/obs-studio/ /root/.config/obs-studio \
-	&& echo headless | sudo -S -k apt install -y obs-studio \
-	&& echo "**** install runtime packages ****" \
-	&& echo headless | sudo -S -k apt-get update \
-	&& echo headless | sudo -S -k apt-get clean -y \
-# Copy various files to their respective places
-	&& echo headless | sudo -S -k wget -q -O /tmp/libndi4_4.5.1-1_amd64.deb https://github.com/Palakis/obs-ndi/releases/download/dummy-tag-4.10.0/libndi4_4.5.1-1_amd64.deb \
-	&& echo headless | sudo -S -k wget -q -O /tmp/obs-ndi-4.10.0-Ubuntu64.deb https://github.com/Palakis/obs-ndi/releases/download/dummy-tag-4.10.0/obs-ndi-4.10.0-Ubuntu64.deb \
+# Install dependencies
+RUN apt-get update && \
+    apt install -y --fix-broken avahi-daemon xterm git build-essential cmake curl ffmpeg \
+    libboost-dev libnss3 mesa-utils qtbase5-dev strace x11-xserver-utils net-tools \
+    python3 python3-numpy scrot wget software-properties-common vlc jq udev unrar \
+    qt5-image-formats-plugins && \
+    apt-get clean -y
 
-# Download and install the plugins for NDI
-	&& echo headless | sudo -S -k dpkg -i /tmp/*.deb \
-	&& echo headless | sudo -S -k rm -rf /tmp/*.deb \
-	&& echo headless | sudo -S -k rm -rf /var/lib/apt/lists/* \
-	
+# Install OBS Studio
+RUN add-apt-repository ppa:obsproject/obs-studio && \
+    apt-get update && \
+    apt install -y obs-studio && \
+    apt-get clean -y
+
+# Download and install the OBS-NDI plugin
+RUN wget -q -O /tmp/libndi4_4.5.1-1_amd64.deb https://github.com/Palakis/obs-ndi/releases/download/4.10.0/libndi4_4.5.1-1_amd64.deb && \
+    wget -q -O /tmp/obs-ndi-4.10.0-Ubuntu64.deb https://github.com/Palakis/obs-ndi/releases/download/4.10.0/obs-ndi-4.10.0-Ubuntu64.deb && \
+    dpkg -i /tmp/*.deb && \
+    rm -rf /tmp/*.deb
+
+# Create necessary directories and set permissions
+RUN mkdir -p /home/headless/.cache /home/headless/Downloads /home/headless/Templates \
+    /home/headless/Public /home/headless/Documents /home/headless/Music \
+    /home/headless/Pictures /home/headless/Videos && \
+    chown -R headless:headless /home/headless && \
+    chmod -R 700 /home/headless/.cache
+
+# Add startup script
+COPY startup.sh /dockerstartup/startup.sh
+RUN chmod +x /dockerstartup/startup.sh
+
+# Define volumes
 VOLUME ["/config"]
+
+# Default command to start the container
+CMD ["/dockerstartup/startup.sh"]
